@@ -14,13 +14,44 @@ const { Client, Intents } = require('discord.js');
   If an error is thrown, a response with code 500 will be returned.
 */
 
-module.exports = async function (req, res) {
-  initClient(req);
+let appwriteClient = null;
+let envs = null;
+
+module.exports = async function (req, res) { 
+  if (!global.client) {
+    initClient(req);
+
+    appwriteClient = sdk.Client();
+    envs = req.env;
+
+    if (
+      !req.env['APPWRITE_FUNCTION_ENDPOINT'] ||
+      !req.env['APPWRITE_FUNCTION_API_KEY']
+    ) {
+      console.warn("Environment variables are not set. Function cannot use Appwrite SDK.");
+    } else {
+      client
+        .setEndpoint(req.env['APPWRITE_FUNCTION_ENDPOINT'])
+        .setProject(req.env['APPWRITE_FUNCTION_PROJECT_ID'])
+        .setKey(req.env['APPWRITE_FUNCTION_API_KEY'])
+        .setSelfSigned(true);
+    }
+
+    setInterval(keepAlive, 300000) // 5 minutes
+  }
+
+  res.send('Success');
 };
+
+function keepAlive() {
+  let functions = new sdk.Functions(appwriteClient);
+
+  functions.createExecution(envs['APPWRITE_FUNCTION_ID'], '', true);
+}
 
 
 function initClient(req) {
-  const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
+  global.client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
 
   client.once('ready', () => {
     console.log('Ready!');
@@ -28,8 +59,6 @@ function initClient(req) {
 
   client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
-
-    console.log('AAAAA');
 
     let command = message.content.split(' ')[0];
     let params = message.content.split(' ').slice(1);
